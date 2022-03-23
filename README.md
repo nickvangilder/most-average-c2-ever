@@ -9,3 +9,6 @@ The most average C2 ever (MACE)
 6. Modify implant.cs to include reference to your c2 server (this is at the very top and there is only once place to specifiy it)
 7. Compile the implant like this: csc.exe /out:"c:\whatever\implant.exe" /target:exe "c:\whatever\implant.cs"
 8. Run implant.exe
+
+
+![image](https://user-images.githubusercontent.com/26583248/159715005-639d9af4-60d5-4a28-a166-1a7771c3bcb9.png)
