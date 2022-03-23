@@ -233,7 +233,7 @@ def process():
        
         sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         sslctx.check_hostname = False
-        sslctx.load_cert_chain(certfile='/etc/letsencrypt/live/mobile.checkhealthinsurance.com/cert.pem', keyfile="/etc/letsencrypt/live/mobile.checkhealthinsurance.com/privkey.pem")
+        sslctx.load_cert_chain(certfile='/etc/letsencrypt/live/yourdomain.com/cert.pem', keyfile="/etc/letsencrypt/live/yourdomain.com/privkey.pem")
         httpd.socket = sslctx.wrap_socket(httpd.socket, server_side=True)
 
         #logging.info('')
