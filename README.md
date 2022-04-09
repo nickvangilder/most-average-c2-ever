@@ -6,8 +6,8 @@ The most average C2 ever (MACE)
 3. Update server.py with referenecs to your own certificates (top of program in global variables)
 4. Start the server like this: python3 server.py
 5. Modify implant.cs to include reference to your c2 server (this is at the very top and there is only once place to specifiy it)
-6. Compile the implant like this: csc.exe /out:"c:\whatever\implant.exe" /target:exe "c:\whatever\implant.cs"
-7. Run implant.exe
+6. Compile the implant like this: csc.exe /out:"c:\whatever\implant.exe" /target:exe /r:"System.Net.Http.dll" "c:\whatever\implant.cs"
+7. Run implant.exe on target
 
 Example of implant connecting back to the listening post:
 
